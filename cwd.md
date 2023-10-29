@@ -39,14 +39,6 @@ Programs such as text editors or compilers will often default to the CWD, especi
 
 Ensuring a secure CWD is vital, as potential attackers might exploit relative paths to run harmful scripts or binaries.
 
----
-Certainly! The internal or "hidden" processes usually aren't executed via terminal commands in the way users interact with a shell, but they can be thought of as operations or function calls that the kernel, filesystem, or other system components perform. Let's delve into these:
-
----
-Certainly! Here's the content with the explanations for the hidden operations added to the right section under every scenario:
-
----
-
 ### Scenarios: Interactions with the CWD
 
 #### 1. Creation of a Directory
@@ -73,16 +65,95 @@ stop
 @enduml
 ```
 
+```plantuml
+@startuml
+title Scenarios: Interactions with the CWD - Creation of a Directory
+
+participant User as U
+participant Shell as SH
+participant System as S
+participant FileSystem as FS
+participant Kernel as K
+
+U -> SH : (1) mkdir new_directory
+activate SH
+
+SH -> S : (1) mkdir() for new_directory
+activate S
+
+S -> S : (2) resolve_path(new_directory)
+note right: If relative, combines with CWD for full path
+
+S -> K : (2) kernel_path_lookup(target_directory)
+activate K
+K -> S : Resolved directory path
+deactivate K
+note right: Hidden Operation to confirm validity and location
+
+S -> FS : (3) check_permissions(user, resolved_path)
+activate FS
+note right: Hidden Operation: filesystem_check_acl(user, target_directory, WRITE)
+
+FS -> S : Permission status
+deactivate FS
+
+alt Has permission?
+    S -> FS : (4) create_dir(resolved_path)
+    activate FS
+    note right: Hidden Operation: kernel_mkdir(target_directory)
+    FS -> S : Directory creation successful
+    deactivate FS
+    S -> SH : Directory created
+    SH -> U : (5) echo "Directory created successfully"
+else
+    S -> SH : Permission denied
+    SH -> U : (6) echo "Permission denied"
+end
+
+deactivate S
+deactivate SH
+
+@enduml
+```
+
+---
+
+### Scenarios: Interactions with the CWD
+
+#### 1. Creation of a Directory
+
+**Command**:
+```bash
+mkdir new_directory
+```
+
+**Steps**:
+
+##### 1.1. User sends request to create directory
+- The shell interprets the `mkdir` command.
+- A system call, `mkdir()`, is invoked by the shell.
+  
+**Explanations**:
+- **(1)**: `mkdir new_directory` command in the terminal indicates user intent. This operation is dependent on the CWD if an absolute path is not specified.
+  
+##### 1.2. System resolves path where directory should be created
+- The kernel performs a path lookup using functions such as `lookup_one_len()`.
+- If a relative path is given, the kernel combines the CWD with the provided directory name to resolve the full path.
+- Function: `resolve_path(new_directory)`
+
 **Explanations**:
 - **(1)**: `mkdir new_directory` command in the terminal indicates user intent.
-- **(2)**: System function `resolve_path(new_directory)` determines the directory's creation path.
-  - **Hidden Operation**: `kernel_path_lookup(target_directory)` - The kernel confirms the validity and location of the directory path.
+- **(2)**: System function `resolve_path(new_directory)` determines the directory's creation path using the CWD as a base for relative paths.
+  - **Hidden Operation**: `kernel_path_lookup(target_directory)` - The kernel confirms the validity and location of the directory path using the CWD.
 - **(3)**: The system checks user permissions via `check_permissions(user, resolved_path)`.
   - **Hidden Operation**: `filesystem_check_acl(user, target_directory, WRITE)` - The filesystem inspects the access control list for user write permissions on the target directory.
 - **(4)**: After confirming permissions, the directory is formed using `create_dir(resolved_path)`.
-  - **Hidden Operation**: `kernel_mkdir(target_directory)` - The kernel performs the directory creation operation.
+  - **Hidden Operation**: `kernel_mkdir(target_directory)` - The kernel performs the directory creation operation using the information derived from the CWD.
 - **(5)**: User receives a success message.
-- **(6)**: If permissions are denied, an error message is displayed.
+- **(6)**: If permissions are denied, an error message is displayed. 
+
+---
+
 
 #### 2. Creation of a File
 
@@ -107,17 +178,96 @@ stop
 
 @enduml
 ```
+```plantuml
+@startuml
+title Scenarios: Interactions with the CWD - Creation of a File
+
+participant User as U
+participant Shell as SH
+participant System as S
+participant FileSystem as FS
+participant Kernel as K
+
+U -> SH : (1) touch new_file.txt
+activate SH
+
+SH -> S : (1) open() with create flags for new_file.txt
+activate S
+
+S -> S : (2) resolve_path(new_file.txt)
+note right: If relative, combines with CWD for full path
+
+S -> K : (2) kernel_path_lookup(target_file)
+activate K
+K -> S : Resolved path
+deactivate K
+note right: Hidden Operation to validate and pinpoint file path
+
+S -> FS : (3) check_permissions(user, resolved_path)
+activate FS
+note right: Hidden Operation: filesystem_check_acl(user, target_file, WRITE)
+
+FS -> S : Permission status
+deactivate FS
+
+alt Has permission?
+    S -> FS : (4) create_file(resolved_path)
+    activate FS
+    note right: Hidden Operation: kernel_create(target_file)
+    FS -> S : File creation successful
+    deactivate FS
+    S -> SH : File created
+    SH -> U : (5) echo "File created successfully"
+else
+    S -> SH : Permission denied
+    SH -> U : (6) echo "Permission denied"
+end
+
+deactivate S
+deactivate SH
+
+@enduml
+```
+
+
+---
+
+### Scenarios: Interactions with the CWD
+
+#### 2. Creation of a File
+
+**Command**:
+```bash
+touch new_file.txt
+```
+
+**Steps**:
+
+##### 2.1. User sends request to create file
+- The shell interprets the `touch` command.
+- A system call related to file creation, e.g., `open()`, is invoked by the shell with specific flags to create the file if it doesn't exist.
+  
+**Explanations**:
+- **(1)**: User initiates file creation with `touch new_file.txt`. This operation often relies on the CWD if an absolute path isn't provided.
+  
+##### 2.2. System establishes the path for file creation
+- If a relative path is indicated, the system combines the CWD with the provided file name to determine the full path.
+- Function: `resolve_path(new_file.txt)`
 
 **Explanations**:
 - **(1)**: User initiates file creation with `touch new_file.txt`.
-- **(2)**: The path for file creation is ascertained using `resolve_path(new_file.txt)`.
-  - **Hidden Operation**: `kernel_path_lookup(target_file)` - The kernel confirms the validity and location of the file path.
+- **(2)**: The path for file creation is ascertained using `resolve_path(new_file.txt)`. If a relative path is given, the system uses the CWD as a base to determine the full path.
+  - **Hidden Operation**: `kernel_path_lookup(target_file)` - The kernel validates and pinpoints the file path, taking into account the CWD for relative paths.
 - **(3)**: User permissions are verified through `check_permissions(user, resolved_path)`.
-  - **Hidden Operation**: `filesystem_check_acl(user, target_file, WRITE)` - The filesystem checks the access control list for user write permissions on the target file.
-- **(4)**: Post permission validation, the file is generated using `create_file(resolved_path)`.
-  - **Hidden Operation**: `kernel_create(target_file)` - The kernel performs the file creation operation.
-- **(5)**: A success message is relayed to the user.
-- **(6)**: In case of denied permissions, an error is displayed.
+  - **Hidden Operation**: `filesystem_check_acl(user, target_file, WRITE)` - The filesystem verifies the access control list to determine user write permissions on the intended file.
+- **(4)**: After the permissions are validated, the file is generated using `create_file(resolved_path)`.
+  - **Hidden Operation**: `kernel_create(target_file)` - The kernel carries out the file creation operation using the details obtained from the CWD.
+- **(5)**: A success message is communicated to the user.
+- **(6)**: If permissions are denied, an error message is presented.
+
+---
+
+
 
 #### 3. Code differentiating between Absolute and Relative Path
 
@@ -142,15 +292,96 @@ stop
 @enduml
 ```
 
+```plantuml
+@startuml
+participant User as U
+participant Shell as S
+participant FileSystem as FS
+participant Kernel as K
+
+U -> S : (1) cd provided_path
+activate S
+
+S -> S : Determine path type
+alt Absolute Path
+    S -> FS : (2) Use provided_path directly
+    activate FS
+    FS -> K : Hidden: kernel_abs_path_resolution(provided_path)
+    activate K
+    K --> FS : Resolved absolute path
+    deactivate K
+    FS --> S : Path verification complete
+    deactivate FS
+else Relative Path
+    S -> FS : Retrieve CWD
+    activate FS
+    FS --> S : Return CWD
+    S -> K : (3) kernel_rel_path_resolution(CWD, provided_path)
+    activate K
+    K --> S : Combined path
+    deactivate K
+end
+
+S -> FS : (4) Perform cd operation
+activate FS
+FS -> K : Change directory to resolved path
+activate K
+K --> FS : Operation status
+deactivate K
+FS --> S : Operation feedback
+deactivate FS
+
+S -> U : (5) Display feedback to user
+deactivate S
+
+U -> U : (6) Receive feedback on operation's results
+
+@enduml
+```
+
+---
+
+### Scenarios: Changing Directories using the CWD
+
+#### 3. Navigating Directories
+
+**Command**:
+```bash
+cd provided_path
+```
+
+**Steps**:
+
+##### 3.1. User expresses intention to change directory
+- The shell processes the `cd` command.
+- Depending on the path's nature (absolute or relative), the system will take different actions to resolve it.
+  
 **Explanations**:
-- **(1)**: A user might provide a path for operations such as `cd provided_path`.
-- **(2)**: For absolute paths (those starting with a root like / or a drive letter in other OS), the system will use the path directly.
-  - **Hidden Operation**: `kernel_abs_path_resolution(provided_path)` - The kernel identifies and resolves absolute paths.
-- **(3)**: If it's a relative path, it's combined with the CWD to form the full path.
-  - **Hidden Operation**: `kernel_rel_path_resolution(CWD, provided_path)` - The kernel combines the current working directory with the relative path to determine the full path.
-- **(4)**: The combined path is then used for the operation.
-- **(5)**: The system executes the operation on the resolved path.
-- **(6)**: Upon completion, the user receives feedback on the operation's results.
+- **(1)**: A user expresses their intent to change the directory, often relying on the CWD if they haven't provided an absolute path. The command in action: `cd provided_path`.
+
+##### 3.2. System determines the nature of the provided path
+- If the path begins with a root marker like '/', it's treated as an absolute path.
+- Conversely, without such markers, the path is treated as relative, and the system will refer to the CWD to decipher the full directory path.
+
+**Explanations**:
+- **(1)**: A user provides a path for operations like `cd provided_path`.
+- **(2)**: For absolute paths (those starting with root markers such as '/'), the system utilizes the path as it is.
+  - **Hidden Operation**: `kernel_abs_path_resolution(provided_path)` - The kernel processes and resolves the absolute paths directly without any need for the CWD.
+- **(3)**: If a relative path is entered, it gets combined with the CWD to yield the complete path.
+  - **Hidden Operation**: `kernel_rel_path_resolution(CWD, provided_path)` - Using the current working directory as a reference, the kernel fuses it with the relative path to establish the full directory path.
+  
+##### 3.3. Execution and Feedback
+- Using the resolved path, the system enacts the directory change.
+- After the operation's success or failure, the user is given an update.
+
+**Explanations**:
+- **(4)**: With the determined path (whether direct or combined with CWD), it becomes the basis for the directory change operation.
+- **(5)**: The system activates the operation on the ascertained path.
+- **(6)**: After finalizing the operation, feedback is rendered to the user, illuminating the outcome.
+
+---
+
+
 
 ### Commands, Software, and Libraries Used:
 
@@ -175,4 +406,3 @@ stop
 - **Visualization of the scenarios**
   - Software: `plantuml`
 
-Note: The "hidden operations" described are abstractions and simplifications of what might occur at a lower level in the system, particularly within the kernel or filesystem. They represent conceptual actions rather than literal function names or commands.
